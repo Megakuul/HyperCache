@@ -1,0 +1,10 @@
+build/
+cmake-build-debug/
+cmake-build-release/
+
+.conan/
+
+# Ignore Emacs backup and autosave files
+*~
+\#*\#
+.\#*
