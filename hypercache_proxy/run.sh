@@ -1,3 +1,5 @@
+set -e
+
 conan install . --build=missing
 
 if [ ! -d "build" ]; then
