@@ -1,0 +1,10 @@
+workspace(name = "example")
+
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "boost",
+    build_file = "@//:boost.BUILD",
+    urls = ["https://boostorg.jfrog.io/artifactory/main/release/1.83.0/source/boost_1_83_0.tar.gz"],
+    strip_prefix = "boost_1_83_0",
+)

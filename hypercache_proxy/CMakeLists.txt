@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.15)
-project(hypercache_proxy)
+cmake_minimum_required(VERSION 3.28)
+project(hc_proxy)
 
 set(CMAKE_CXX_STANDARD 23)
 
@@ -13,10 +13,14 @@ set(SOURCE
   src/main.cc
 )
 
+set(BOOST_COMPONENTS
+  system
+  filesystem
+)
+
+find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+
 include_directories(includes)
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()
-
 add_executable(${PROJECT_NAME} ${SOURCE})
-target_link_libraries(${PROJECT_NAME} ${CONAN_LIBS})
+target_link_libraries(${PROJECT_NAME} Boost::${BOOST_COMPONENTS})

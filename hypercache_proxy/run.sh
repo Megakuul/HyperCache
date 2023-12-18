@@ -1,21 +1,15 @@
 set -e
 
-conan install . --build=missing
-
 if [ ! -d "build" ]; then
     mkdir build
 fi
 
 cd build
 
-cmake ..
+conan install .. --build=missing
 
-if [ $? -eq 0 ]; then
-	cmake --build .
-fi
+cmake .. -DCMAKE_TOOLCHAIN_FILE=./Release/generators/conan_toolchain.cmake
 
-if [ $? -eq 0 ]; then
-    ./hc_prox
-else
-    echo "Build failed. Please check the errors above."
-fi
+cmake --build .
+
+./hc_proxy

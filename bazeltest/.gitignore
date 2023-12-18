@@ -1,0 +1,11 @@
+# Ignore Emacs backup and autosave files
+*~
+\#*\#
+.\#*
+
+
+# Ignore Bazel builds
+/bazel-*
+/bazel-*/
+**/bazel-*
+**/bazel-*/
