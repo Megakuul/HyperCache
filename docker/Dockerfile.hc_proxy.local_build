@@ -1,0 +1,6 @@
+FROM alpine:latest
+COPY /bazel-bin/hypercache_proxy/hypercache_proxy /usr/bin/hc_proxy
+
+RUN apk add libstdc++
+
+ENTRYPOINT ["/usr/bin/hc_proxy"]

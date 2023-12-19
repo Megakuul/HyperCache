@@ -1,0 +1,8 @@
+# Ignore Emacs backup and autosave files
+*~
+\#*\#
+.\#*
+
+# Ignore unnessecary folders
+PoC/**
+docker/**

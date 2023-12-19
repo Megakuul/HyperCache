@@ -1,0 +1,17 @@
+FROM archlinux:latest as builder
+
+RUN pacman -Sy --noconfirm
+RUN pacman -S --noconfirm base-devel gcc bazel
+
+COPY / /usr/src/hypercache
+
+WORKDIR /usr/src/hypercache
+
+RUN bazel build //hypercache_proxy
+
+FROM alpine:latest
+COPY --from=builder /usr/src/hypercache/bazel-bin/hypercache_proxy/hypercache_proxy /usr/bin/hc_proxy
+
+RUN apk add libstdc++
+
+ENTRYPOINT ["/usr/bin/hc_proxy"]

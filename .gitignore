@@ -1,5 +1,17 @@
-# Ignore Emacs backup and autosave files
+# Ignore Bazel stuff
+bazel-bin/
+bazel-out/
+bazel-testlogs/
+bazel-hypercache/
+bazel-*
+
+# Ignore Compile Commands
+compile_commands.json
+
+# Ignore Emacs stuff
 *~
 \#*\#
 .\#*
 
+# Ignore VSCode stuff
+.vscode/**
