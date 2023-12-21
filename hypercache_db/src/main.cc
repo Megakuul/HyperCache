@@ -1,12 +1,13 @@
 #include <iostream>
-
-#include "main.h"
-
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 
+#include "main.hpp"
+
 using namespace std;
+using namespace boost;
+
 int main(void) {
   boost::asio::io_context io_context;
-  cout << "Hallo From " << TEST << endl;
+  cout << "Hallo From " << endl;
 }
