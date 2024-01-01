@@ -41,4 +41,6 @@ To generate the *compile_commands.json* file there are various options, I recomm
 
 [bazel-compile-commands releases](https://github.com/kiron1/bazel-compile-commands/releases)
 
+(In case std is by default not ++23, you can use this option to replace the std: *bazel-compile-commands -R c++14=c++23*)
+
 Currently for me this is the most stable option.
