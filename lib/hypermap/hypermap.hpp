@@ -13,17 +13,11 @@
 using namespace std;
 
 namespace hypermap {
-	enum State {
-		UNINIT,
-		EMTPY,
-		ACTIVE,
-	};
-
 	template <typename T>
 	class HyperSlot {
-		string key;
+	public:
+		string key = "";
 		T val;
-		State state = UNINIT;
 	};
 
 	template <typename Base_T>
@@ -39,45 +33,119 @@ namespace hypermap {
 	public:
 		HyperMap() {
 			size = MAP_SIZE;
-			map = new variant<Derived_T...>[size];
+			map = new HyperSlot<variant<Derived_T...>>[size];
 		};
 		virtual ~HyperMap() {
 			delete map;
 		};
-		HyperMap operator[](const string& key) {
-			// Benchmark, maybe % is better due to better distribution
-			uint32_t idx = hyperhash::hash(key) & (size-1);
-			// idx = Hash(key) % size
-			// if (map[idx].key == key)
-			// return &map[idx].val;
-			// else probe()
+		// Constants for quadratic probing
+		inline static const uint8_t c1 = 1;
+		inline static const uint8_t c2 = 3;
+		
+		variant<Derived_T...>& operator[](const string& key) {
+			// Calculate initial hash
+			uint32_t hash = hyperhash::hash(key);
+			// Trimm down hash to index
+			uint32_t idx = hash & (size-1);
+			// Set attempt to 0
+			uint32_t att = 0;
 
-			// Automatically initialize object / clear
+			// Initial slot
+			HyperSlot<variant<Derived_T...>>* slot = &map[idx];
+
+			// Probe until slot is uninitialized || the correct slot
+			while (slot->key!=key && slot->key!="") {
+				// Quadratic probing function
+				idx = (hash + c1 * att + c2 * (att * att)) % size;
+				// Update slot
+				slot = &map[idx];
+				// Increment attempt (if every field was probed -> nullptr)
+				if (++att>size) return nullptr;
+			}
+
+			if (slot->key=="") {
+				slot->key = key;
+				slot->val = variant<Derived_T...>();
+			}
+
+			return slot->val;
 		};
 
 		Base_T* get(const string& key) {
-			
-			// idx = Hash(key) % size
-			// if (map[idx].key == key)
-			return visit(BaseVisitor<Base_T>{}, val);
-			// return &map[idx].val;
-			// else probe()
+			// Calculate initial hash
+			uint32_t hash = hyperhash::hash(key);
+			// Trimm down hash to index
+			uint32_t idx = hash & (size-1);
+			// Set attempt to 0
+			uint32_t att = 0;
 
-			// RETURN NULLPTR if empty or uninit
+			// Initial slot
+			HyperSlot<variant<Derived_T...>>* slot = &map[idx];
+
+			// Probe until slot is uninitialized || the correct slot
+			while (slot->key!=key && slot->key!="") {
+				// Quadratic probing function
+				idx = (hash + c1 * att + c2 * (att * att)) % size;
+				// Update slot
+				slot = &map[idx];
+				// Increment attempt (if every field was probed -> nullptr)
+				if (++att>size) return nullptr;
+			}
+			// Return BasePointer or nullptr if slot is empty
+			return slot->key=="" ? nullptr : visit(BaseVisitor<Base_T>{}, slot->val);
 		};
 
-		void set(const string& key, const variant<Derived_T...>& val) {
-			uint32_t idx = hyperhash::hash(key) & (size-1);
-			// if (map[idx].key == key)
-			// &map[idx].val = val;
-			// else probe()
+		Base_T* set(const string& key, const variant<Derived_T...>& val) {
+			// Calculate initial hash
+			uint32_t hash = hyperhash::hash(key);
+			// Trimm down hash to index
+			uint32_t idx = hash & (size-1);
+			// Set attempt to 0
+			uint32_t att = 0;
 
-			// Set no matter what
+			// Initial slot
+			HyperSlot<variant<Derived_T...>>* slot = &map[idx];
+
+			// Probe until slot is uninitialized || the correct slot
+			while (slot->key!="" && slot->key!=key) {
+				// Quadratic probing function
+				idx = (hash + c1 * att + c2 * (att * att)) % size;
+				// Update slot
+				slot = &map[idx];
+				// Increment attempt (if every field was probed -> nullptr)
+				if (++att>size) return nullptr;
+			}
+
+			// Update slot values
+			slot->key = key;
+			slot->val = val;
+
+			return visit(BaseVisitor<Base_T>{}, slot->val);
 		};
 
 		void del(const string& key) {
+			// Calculate initial hash
+			uint32_t hash = hyperhash::hash(key);
+			// Trimm down hash to index
+			uint32_t idx = hash & (size-1);
+			// Set attempt to 0
+			uint32_t att = 0;
 
-			// Just set flag to empty
+			// Initial slot
+			HyperSlot<variant<Derived_T...>>* slot = &map[idx];
+
+			// Probe until slot is uninitialized || the correct slot
+			while (slot->key!="" && slot->key!=key) {
+				// Quadratic probing function
+				idx = (hash + c1 * att + c2 * (att * att)) % size;
+				// Update slot
+				slot = &map[idx];
+				// Increment attempt (if every field was probed -> nullptr)
+				if (++att>size) return;
+			}
+
+			slot->key = "";
+			slot->val = HyperSlot<variant<Derived_T...>>();
 		};
 	private:
 		uint16_t size;
