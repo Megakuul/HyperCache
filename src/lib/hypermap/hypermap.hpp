@@ -30,6 +30,10 @@
 using namespace std;
 
 namespace hypermap {
+	/**
+	 * Key-Value datastructure for each slot
+	 * If key is set to "" this symbolizes that the slot is unoccupied / empty.
+	 */
 	template <typename T>
 	class HyperSlot {
 	public:
@@ -37,6 +41,9 @@ namespace hypermap {
 		T val;
 	};
 
+	/**
+	 * Visitor to return the basepointer from the derived variant
+	 */
 	template <typename Base_T>
 	struct BaseVisitor {
 		template<typename T>
@@ -77,20 +84,22 @@ namespace hypermap {
 				throw invalid_argument("Mapsize must be a power of two!");
 			// Initialize map
 			size = mapsize;
+			occupied = 0;
 			map = new HyperSlot<variant<Derived_T...>>[size];
 		};
 		virtual ~HyperMap() {
 			delete[] map;
 		};
-		HyperMap(HyperMap&& other) noexcept : size(other.size), map(other.map) {
+		HyperMap(HyperMap&& other) noexcept : size(other.size), occupied(other.occupied), map(other.map) {
 			// Skip if same
 			if (this != &other) {
 				// Clear up resources on other
 				other.size = 0;
+				other.occupied = 0;
 				other.map = nullptr;
 			};
 		};
-		HyperMap(const HyperMap& other) : size(other.size) {
+		HyperMap(const HyperMap& other) : size(other.size), occupied(other.occupied) {
 			if (this != &other) {
 				try {
 					// Copy constructor in this case uses default initialization and assignment instead of the copy constructor of the elements.
@@ -107,6 +116,7 @@ namespace hypermap {
 				} catch (...) {
 					// Clean up resources on error
 					size = 0;
+					occupied = 0;
 					delete[] map;
 					throw;
 				}
@@ -118,9 +128,11 @@ namespace hypermap {
 				// Clear map before moving
 				delete[] map;
 				// Shallow copy
+				occupied = other.occupied;
 				size = other.size;
 				map = other.map;
 				// Clear up resources on other
+				other.occupied = 0;
 				other.size = 0;
 				other.map = nullptr;
 			}
@@ -132,6 +144,7 @@ namespace hypermap {
 				// Clean up old map
 				delete[] map;
 				// Update every field with copy semantics
+				occupied = other.occupied;
 				size = other.size;
 				for (size_t i = 0; i < other.size; ++i) {
 					map[i] = other.map[i];
@@ -139,7 +152,73 @@ namespace hypermap {
 			};
 			return *this;
 		};
-		
+
+		class HyperMapIterator {
+		public:
+			HyperMapIterator(uint16_t index, HyperMap& map) : idx(index), hypermap(map) {};
+
+			HyperMapIterator& operator++() {
+				// Skip all empty elements (key=="")
+				do {
+					idx++;
+				} while (idx < hypermap.size && hypermap.map[idx].key=="");
+				// Return Mapiterator
+				return *this;
+			};
+
+			auto& operator*() const {
+				// Get current slot
+				HyperSlot<variant<Derived_T...>> &slot = hypermap.map[idx];
+				// Get baseptr to value
+				Base_T* baseptr = visit(BaseVisitor<Base_T>{}, slot.val);
+				// Return key-value pair
+				return make_pair(slot.key, baseptr);
+			};
+
+			bool operator==(const HyperMapIterator& other) {
+				return this->idx == other.idx;
+			};
+			
+			bool operator!=(const HyperMapIterator& other) {
+				return !(*this==other);
+			};
+
+			
+		private:
+			uint16_t idx;
+			HyperMap& hypermap;
+		};
+
+		/**
+		 * Returns the first iterator of the map
+		 */
+		HyperMapIterator begin() {
+			// Skip all empty elements (key=="")
+			uint16_t idx = 0;
+			while (idx < size && map[idx].key=="") {
+				idx++;
+			}
+			return HyperMapIterator(idx, *this);
+		};
+
+		/**
+		 * Returns the last+1 iterator of the map
+		 */
+		HyperMapIterator end() {
+			return HyperMapIterator(size, *this); 
+		};
+
+		/**
+		 * Returns the occupied slots
+		 */
+		uint16_t load() {
+			return occupied;
+		}
+
+		/**
+		 * Returns a variant reference to the value in the slot
+		 * If the slot does not exist, this will automatically initialize it with default variant
+		 */
 		variant<Derived_T...>& operator[](const string& key) {
 			HyperSlot<variant<Derived_T...>>* slot = probe(key, size, map);
 			if (!slot) throw runtime_error("HyperMap exhausted; No free slot found!");
@@ -147,12 +226,17 @@ namespace hypermap {
 			if (slot->key=="") {
 				// Update slot values (assignment operator must deallocate old resources if type is correctly implemented)
 				slot->key = key;
+				occupied++;
 				slot->val = variant<Derived_T...>();
 			}
 
 			return slot->val;
 		};
 
+		/**
+		 * Returns the basepointer to the slot value in the map
+		 * If the slot is not found it will return nullptr
+		 */
 		Base_T* get(const string& key) {
 			HyperSlot<variant<Derived_T...>>* slot = probe(key, size, map);
 			if (!slot) return nullptr;
@@ -160,23 +244,33 @@ namespace hypermap {
 			return slot->key=="" ? nullptr : visit(BaseVisitor<Base_T>{}, slot->val);
 		};
 
+		/**
+		 * Overwrites the slot value
+		 * Returns the basepointer to the updated slot-value
+		 * Throws a runtime error if no slot in the map is free.
+		 */
 		Base_T* set(const string& key, const variant<Derived_T...>& val) {
 			HyperSlot<variant<Derived_T...>>* slot = probe(key, size, map);
 			if (!slot) throw runtime_error("HyperMap exhausted; No free slot found!");
 
 			// Update slot values (assignment operator must deallocate old resources if type is correctly implemented)
 			slot->key = key;
+			occupied+=slot->key=="" ? 1 : 0;
 			slot->val = val;
 
 			return visit(BaseVisitor<Base_T>{}, slot->val);
 		};
 
+		/**
+		 * Sets the slot to unoccupied and default initializes the value of the slot (by this it removes the old data)
+		 */
 		void del(const string& key) {
 			HyperSlot<variant<Derived_T...>>* slot = probe(key, size, map);
 			if (!slot) return;
 
 			// Update slot values (assignment operator must deallocate old resources if type is correctly implemented)
 			slot->key = "";
+			occupied--;
 			slot->val = HyperSlot<variant<Derived_T...>>();
 		};
 		
@@ -209,6 +303,7 @@ namespace hypermap {
 		};
 		
 		uint16_t size;
+		uint16_t occupied;
 		HyperSlot<variant<Derived_T...>>* map;
 	};
 }
