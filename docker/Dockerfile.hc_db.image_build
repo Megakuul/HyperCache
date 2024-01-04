@@ -3,7 +3,7 @@ FROM archlinux:latest as builder
 RUN pacman -Sy --noconfirm
 RUN pacman -S --noconfirm base-devel gcc bazel
 
-COPY / /usr/src/hypercache
+COPY /src /usr/src/hypercache
 
 WORKDIR /usr/src/hypercache
 

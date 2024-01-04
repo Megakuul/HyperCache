@@ -1,0 +1,6 @@
+# Ignore Bazel stuff
+bazel-bin/
+bazel-out/
+bazel-testlogs/
+bazel-hypercache/
+bazel-*

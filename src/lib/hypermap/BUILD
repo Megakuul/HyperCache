@@ -1,6 +1,6 @@
 cc_library(
-	name = "hyperhash",
-	hdrs = ["hyperhash.hpp"],
+	name = "hypermap",
+	hdrs = ["hypermap.hpp"],
     copts = ["-std=c++23"],
 	visibility = ["//visibility:public"]
 )

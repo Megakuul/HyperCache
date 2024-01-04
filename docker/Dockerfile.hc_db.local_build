@@ -1,5 +1,5 @@
 FROM alpine:latest
-COPY /bazel-bin/hypercache_db/hypercache_db /usr/bin/hc_db
+COPY /src/bazel-bin/hypercache_db/hypercache_db /usr/bin/hc_db
 
 RUN apk add libstdc++
 
