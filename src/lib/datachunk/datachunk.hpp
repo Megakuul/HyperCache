@@ -71,7 +71,7 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not ProtoChunk
 		 */
-		virtual pair<const uint8_t*, const uint8_t> get_proto() {
+		virtual pair<const uint8_t*, const uint8_t> get_proto() const {
 			throw runtime_error("DataChunk is not of type PROTO");
 		};
 		/**
@@ -88,7 +88,7 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not CountChunk
 		 */
-		virtual uint64_t get_count() {
+		virtual uint64_t get_count() const {
 			throw runtime_error("DataChunk is not of type COUNT");
 		};
 		/**
@@ -113,15 +113,7 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not GroupChunk
 		 */
-		virtual unordered_set<string> get_group() {
-			throw runtime_error("DataChunk is not of type GROUP");
-		};
-		/**
-		 * Set GroupChunk data (for informations check GroupChunk)
-		 *
-		 * Throws a runtime_error if the derived type is not GroupChunk
-		 */
-		virtual unordered_set<string> set_group(unordered_set<string>& new_group) {
+		virtual unordered_set<weak_ptr<DataChunk>> get_group() const {
 			throw runtime_error("DataChunk is not of type GROUP");
 		};
 		/**
@@ -129,7 +121,7 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not GroupChunk
 		 */
-		virtual unordered_set<string> push_group(string& key) {
+		virtual unordered_set<weak_ptr<DataChunk>> push_group(DataChunk& chunk) {
 			throw runtime_error("DataChunk is not of type GROUP");
 		};
 		/**
@@ -137,12 +129,50 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not GroupChunk
 		 */
-		virtual unordered_set<string> del_group(string& key) {
+		virtual unordered_set<weak_ptr<DataChunk>> del_group(DataChunk& chunk) {
 			throw runtime_error("DataChunk is not of type GROUP");
 		};
-	
+
+		/**
+		 * Gets a set of groups that this datachunk is assigned to
+		 */
+		unordered_set<weak_ptr<GroupChunk>> get_assign() const {
+			return group_assignments;
+		};
+		/**
+		 * Adds a group assignment to this datachunk
+		 */
+		void add_assign(weak_ptr<GroupChunk> assign) {
+			group_assignments.insert(assign);
+		};
+		/**
+		 * Delets a group assignment to this datachunk
+		 */
+		void del_assign(weak_ptr<GroupChunk> assign) {
+			group_assignments.erase(assign);
+		};
 	private:
-		// unordered_set<weak_ptr<GroupChunk>> group_assignments;
+		// TODO: Figure out a way for this problem
+		/*
+		  How is memory managed in HyperCache:
+			Hyperslots return raw DataChunk pointers, this is not safe! This is why when doing something,
+			hyperslots (that are btw. the only way to access datachunks) always return a LOCK asside, this
+			lock is most likely like a mutex lock, and allows consistent data without smart_ptrs, as long as the
+			hyperslot locks are locked, NOTHING will access / delete the memory, after the lock is released, the PTR shall not be used anymore.
+
+			Now the problem is this: I can not persistently store ptrs to datachunks, this is dumb for the group
+			type, there we have the option to just store raw "strings", but this would require on every read of the group
+			bzw. on every query etc. to the group, we would need multiple hashes multiple hypermap accesses.
+			It would be far more clean to have something like a ptr list and a group_assignment list on every
+			datachunk, that can directly on destruction remove its assignment on the group and vise-verca.
+			This unfortunaly dont work, the behaviour we need is what weak_ptrs provide
+			(allows check if the ptr is still existent). For pretty logical reasons this doesnt work in my scenario
+			(with inlined allocations).
+			The problem essentially is that the HyperSlot determines the livetime of the DataChunk.
+			
+		 */
+		// Group assignments is a set of weak_ptrs to all groups that the datachunk is assigned to
+		unordered_set<weak_ptr<GroupChunk>> group_assignments;
 	};
 
 	/**
@@ -161,9 +191,14 @@ namespace datachunk {
 	 */
 	class ProtoChunk : public DataChunk {
 	public:
+		ProtoChunk(const ProtoChunk& other) = default;
+		ProtoChunk(ProtoChunk&& other) = default;
+		ProtoChunk& operator=(const ProtoChunk&) = default;
+		ProtoChunk& operator=(ProtoChunk&&) = default;
+
 		DataType get_type() noexcept override { return PROTO; };
 	
-		pair<const uint8_t*, const uint8_t> get_proto() override {
+		pair<const uint8_t*, const uint8_t> get_proto() const override {
 			// If quick_mode is enabled, return quick bytes
 			if (quick_mode) return make_pair(quick_bytes, quick_size);
 			// If not, return the bytes from vector
@@ -214,14 +249,19 @@ namespace datachunk {
 	 *
 	 * This datatype is a simple counter that can be incremented / decremented.
 	 *
-	 * If the counter overflows (unsigned 64bit), expected modulo semantics come into force.
+	 * If the counter overflows (unsigned 64bit), expected modulo arithmetics come into force.
 	 * (e.g. 2^64+1 = 1 || 0-1 = 2^64-1)
 	 */
 	class CountChunk : public DataChunk {
 	public:
+		CountChunk(const CountChunk& other) = default;
+		CountChunk(CountChunk&& other) = default;
+		CountChunk& operator=(const CountChunk&) = default;
+		CountChunk& operator=(CountChunk&&) = default;
+		
 		DataType get_type() noexcept override { return COUNT; };
 	
-		uint64_t get_count() override {
+		uint64_t get_count() const override {
 			return count;
 		};
 		uint64_t set_count(uint64_t& new_count) override {
@@ -243,25 +283,27 @@ namespace datachunk {
 	 */
 	class GroupChunk : public DataChunk {
 	public:
+		GroupChunk(const GroupChunk& other) = default;
+		GroupChunk(GroupChunk&& other) = default;
+		GroupChunk& operator=(const GroupChunk&) = default;
+		GroupChunk& operator=(GroupChunk&&) = default;
+		
 		DataType get_type() noexcept override { return GROUP; };
 	
-		unordered_set<string> get_group() override {
+		unordered_set<weak_ptr<DataChunk>> get_group() const override {
 			return group;
 		};
-		unordered_set<string> set_group(unordered_set<string>& new_group) override {
-			group = new_group;
+		unordered_set<weak_ptr<DataChunk>> push_group(DataChunk& chunk) override {
+			group.insert(chunk.get_weak());
+			chunk.add_assign(this->get_weak());
 			return group;
 		};
-		unordered_set<string> push_group(string& key) override {
-			group.insert(key);
-			return group;
-		};
-		unordered_set<string> del_group(string& key) override {
-			group.erase(key);
+		unordered_set<weak_ptr<DataChunk>> del_group(DataChunk* chunk) override {
+			group.erase(chunk->get_weak());
 			return group;
 		};
 	private:
-		unordered_set<string> group;
+		unordered_set<weak_ptr<DataChunk>> group;
 	};
 
 };

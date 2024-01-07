@@ -21,9 +21,11 @@
 #define HYPERMAP_H
 
 #include <cstdint>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <variant>
+#include <functional>
 
 #include "hyperhash.hpp"
 
@@ -39,6 +41,38 @@ namespace hypermap {
 	public:
 		string key = "";
 		T val;
+		mutex lock;
+	};
+
+	/**
+	 * Operator that is returned for usage in higher level functions
+	 *
+	 * The operator implements a "operate" function that can be used for operating with the datachunk.
+	 *
+	 * In the "operate" function the first argument can be used to access the DataChunk base pointer for the data.
+	 *
+	 * The DataChunk pointer may not be used outside the "operate" function, this is a crucial part of the memory management strategy.
+	 *
+	 * To keep the data consistent and ensure memory safety, the "operate" function can only be called once, after initial call the function will throw a runtime_error.
+	 */
+	template <typename Base_T>
+	class SlotOperator {
+	public:
+		SlotOperator<Base_T>(Base_T* base_ptr, mutex* mut_ptr) {
+			data_ptr = base_ptr;
+			lock_ptr = mut_ptr;
+		};
+		void operate(function<void(Base_T*)> callback) {
+			if (invoked) {
+				throw runtime_error("SlotOperator cannot be invoked twice!");
+			} else invoked = true;
+			const lock_guard<mutex> lock(*lock_ptr);
+			callback(data_ptr);
+		};
+	private:
+		bool invoked = false;
+		Base_T* data_ptr;
+		mutex* lock_ptr;
 	};
 
 	/**
@@ -216,32 +250,17 @@ namespace hypermap {
 		}
 
 		/**
-		 * Returns a variant reference to the value in the slot
-		 * If the slot does not exist, this will automatically initialize it with default variant
-		 */
-		variant<Derived_T...>& operator[](const string& key) {
-			HyperSlot<variant<Derived_T...>>* slot = probe(key, size, map);
-			if (!slot) throw runtime_error("HyperMap exhausted; No free slot found!");
-
-			if (slot->key=="") {
-				// Update slot values (assignment operator must deallocate old resources if type is correctly implemented)
-				slot->key = key;
-				occupied++;
-				slot->val = variant<Derived_T...>();
-			}
-
-			return slot->val;
-		};
-
-		/**
 		 * Returns the basepointer to the slot value in the map
 		 * If the slot is not found it will return nullptr
 		 */
-		Base_T* get(const string& key) {
+		SlotOperator<Base_T> get(const string& key) {
 			HyperSlot<variant<Derived_T...>>* slot = probe(key, size, map);
 			if (!slot) return nullptr;
 			// Return BasePointer or nullptr if slot is empty
-			return slot->key=="" ? nullptr : visit(BaseVisitor<Base_T>{}, slot->val);
+			return SlotOperator<Base_T>(
+			  slot->key=="" ? nullptr : visit(BaseVisitor<Base_T>{}, slot->val),
+				&slot->lock
+		  );
 		};
 
 		/**
@@ -249,7 +268,7 @@ namespace hypermap {
 		 * Returns the basepointer to the updated slot-value
 		 * Throws a runtime error if no slot in the map is free.
 		 */
-		Base_T* set(const string& key, const variant<Derived_T...>& val) {
+		SlotOperator<Base_T> set(const string& key, const variant<Derived_T...>& val) {
 			HyperSlot<variant<Derived_T...>>* slot = probe(key, size, map);
 			if (!slot) throw runtime_error("HyperMap exhausted; No free slot found!");
 
@@ -258,7 +277,10 @@ namespace hypermap {
 			occupied+=slot->key=="" ? 1 : 0;
 			slot->val = val;
 
-			return visit(BaseVisitor<Base_T>{}, slot->val);
+			return SlotOperator<Base_T>(
+			  visit(BaseVisitor<Base_T>{}, slot->val),
+				&slot->lock													
+      );
 		};
 
 		/**
