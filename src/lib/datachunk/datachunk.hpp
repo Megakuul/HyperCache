@@ -64,7 +64,7 @@ namespace datachunk {
 		/**
 		 * Get DataType of the implemented type
 		 */
-		virtual DataType get_type() noexcept { return NONE; };
+		virtual DataType get_type() const noexcept { return NONE; };
 
 		/**
 		 * Get ProtoChunk data (for informations check ProtoChunk)
@@ -113,7 +113,7 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not GroupChunk
 		 */
-		virtual unordered_set<weak_ptr<DataChunk>> get_group() const {
+		virtual unordered_set<string> get_group() const {
 			throw runtime_error("DataChunk is not of type GROUP");
 		};
 		/**
@@ -121,7 +121,7 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not GroupChunk
 		 */
-		virtual unordered_set<weak_ptr<DataChunk>> push_group(DataChunk& chunk) {
+		virtual unordered_set<string> push_group(string& key) {
 			throw runtime_error("DataChunk is not of type GROUP");
 		};
 		/**
@@ -129,28 +129,10 @@ namespace datachunk {
 		 *
 		 * Throws a runtime_error if the derived type is not GroupChunk
 		 */
-		virtual unordered_set<weak_ptr<DataChunk>> del_group(DataChunk& chunk) {
+		virtual unordered_set<string> del_group(string& key) {
 			throw runtime_error("DataChunk is not of type GROUP");
 		};
-
-		/**
-		 * Gets a set of groups that this datachunk is assigned to
-		 */
-		unordered_set<weak_ptr<GroupChunk>> get_assign() const {
-			return group_assignments;
-		};
-		/**
-		 * Adds a group assignment to this datachunk
-		 */
-		void add_assign(weak_ptr<GroupChunk> assign) {
-			group_assignments.insert(assign);
-		};
-		/**
-		 * Delets a group assignment to this datachunk
-		 */
-		void del_assign(weak_ptr<GroupChunk> assign) {
-			group_assignments.erase(assign);
-		};
+		
 	private:
 		// TODO: Figure out a way for this problem
 		/*
@@ -172,7 +154,7 @@ namespace datachunk {
 			
 		 */
 		// Group assignments is a set of weak_ptrs to all groups that the datachunk is assigned to
-		unordered_set<weak_ptr<GroupChunk>> group_assignments;
+		// unordered_set<weak_ptr<GroupChunk>> group_assignments;
 	};
 
 	/**
@@ -196,7 +178,7 @@ namespace datachunk {
 		ProtoChunk& operator=(const ProtoChunk&) = default;
 		ProtoChunk& operator=(ProtoChunk&&) = default;
 
-		DataType get_type() noexcept override { return PROTO; };
+		DataType get_type() const noexcept override { return PROTO; };
 	
 		pair<const uint8_t*, const uint8_t> get_proto() const override {
 			// If quick_mode is enabled, return quick bytes
@@ -259,7 +241,7 @@ namespace datachunk {
 		CountChunk& operator=(const CountChunk&) = default;
 		CountChunk& operator=(CountChunk&&) = default;
 		
-		DataType get_type() noexcept override { return COUNT; };
+		DataType get_type() const noexcept override { return COUNT; };
 	
 		uint64_t get_count() const override {
 			return count;
@@ -279,7 +261,9 @@ namespace datachunk {
 	/**
 	 * GroupChunk is a additional Datatype for HyperCache.
 	 *
-	 * This datatype is a group of datachunks.
+	 * This datatype just groups multiple string keys.
+	 *
+	 * It is used to perform query operations.
 	 */
 	class GroupChunk : public DataChunk {
 	public:
@@ -288,22 +272,21 @@ namespace datachunk {
 		GroupChunk& operator=(const GroupChunk&) = default;
 		GroupChunk& operator=(GroupChunk&&) = default;
 		
-		DataType get_type() noexcept override { return GROUP; };
+		DataType get_type() const noexcept override { return GROUP; };
 	
-		unordered_set<weak_ptr<DataChunk>> get_group() const override {
+		unordered_set<string> get_group() const override {
 			return group;
 		};
-		unordered_set<weak_ptr<DataChunk>> push_group(DataChunk& chunk) override {
-			group.insert(chunk.get_weak());
-			chunk.add_assign(this->get_weak());
+		unordered_set<string> push_group(string& key) override {
+			group.insert(key);
 			return group;
 		};
-		unordered_set<weak_ptr<DataChunk>> del_group(DataChunk* chunk) override {
-			group.erase(chunk->get_weak());
+		unordered_set<string> del_group(string& key) override {
+			group.erase(key);
 			return group;
 		};
 	private:
-		unordered_set<weak_ptr<DataChunk>> group;
+		unordered_set<string> group;
 	};
 
 };
